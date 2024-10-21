@@ -66,24 +66,13 @@ std::string get_recipient_keyid(gpgme_ctx_t ctx) {
     return recipient;
 }
 
-void encrypt_csv_with_pgp(gpgme_ctx_t ctx, const std::string& recipient, const std::string& csv_file_path, const std::string& output_file) {
+void encrypt_csv_with_pgp(gpgme_ctx_t ctx, const std::string& recipient, const std::string& csv_content, const std::string& output_file) {
     gpgme_data_t plaintext, ciphertext;
     gpgme_key_t key[2] = {nullptr, nullptr};
     gpgme_error_t err;
 
-    // Set output to be ASCII-armored, don't fully understand this bit
+    // Set output to be ASCII-armored
     gpgme_set_armor(ctx, 1);
-
-    // Read CSV content into string
-    std::ifstream csv_file(csv_file_path);
-    if (!csv_file) {
-        std::cerr << "Failed to open CSV file: " << csv_file_path << std::endl;
-        std::exit(1);
-    }
-    std::ostringstream csv_oss;
-    csv_oss << csv_file.rdbuf();
-    std::string csv_content = csv_oss.str();
-    csv_file.close();
 
     // Load the recipient's public key
     err = gpgme_get_key(ctx, recipient.c_str(), &key[0], 0);
@@ -92,14 +81,14 @@ void encrypt_csv_with_pgp(gpgme_ctx_t ctx, const std::string& recipient, const s
         std::exit(1);
     }
 
-    // Data buffer for CSV file
+    // Data buffer for CSV content (plaintext)
     err = gpgme_data_new_from_mem(&plaintext, csv_content.c_str(), csv_content.size(), 0);
     if (err) {
         std::cerr << "Failed to create plaintext data object: " << gpgme_strerror(err) << std::endl;
         std::exit(1);
     }
 
-    // Data buffer for encrypted output
+    // Data buffer for encrypted output (ciphertext)
     err = gpgme_data_new(&ciphertext);
     if (err) {
         std::cerr << "Failed to create encrypted data object: " << gpgme_strerror(err) << std::endl;
@@ -148,14 +137,28 @@ int main() {
         std::exit(1);
     }
 
-    // Import pgp key
+    // Set output to be ASCII-armored
+    gpgme_set_armor(ctx, 1);
+
+    // Import PGP key
     import_public_key(ctx, public_key_file);
 
-    // Get the pgp key ID (assumes only key in keyring)
+    // Get the PGP key ID (assumes only key in keyring)
     std::string recipient = get_recipient_keyid(ctx);
 
-    // Encrypt the CSV file
-    encrypt_csv_with_pgp(ctx, recipient, csv_file_path, output_file);
+    // Read CSV content into string (in-memory)
+    std::ifstream csv_file(csv_file_path);
+    if (!csv_file) {
+        std::cerr << "Failed to open CSV file: " << csv_file_path << std::endl;
+        std::exit(1);
+    }
+    std::ostringstream csv_oss;
+    csv_oss << csv_file.rdbuf();
+    std::string csv_content = csv_oss.str();
+    csv_file.close();
+
+    // Encrypt the CSV content (in-memory)
+    encrypt_csv_with_pgp(ctx, recipient, csv_content, output_file);
 
     // Release the GPGME context
     gpgme_release(ctx);
